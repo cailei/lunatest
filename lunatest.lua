@@ -769,8 +769,12 @@ function run(hooks, opts)
    results.t_pre = now()
 
    -- If it's all in one test file, check its environment, too.
-   local env = getenv(3)
-   if env then suites.main = get_tests(env) end
+   local status, env = pcall(getenv, 3)
+   if status and env then
+      suites.main = get_tests(env)
+   else
+      suites.main =  get_tests(getenv())
+   end
 
    if hooks.begin then hooks.begin(results, suites) end
 
