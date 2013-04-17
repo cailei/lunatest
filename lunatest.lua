@@ -132,17 +132,16 @@ function RPass:tostring(name)
 end
 
 
-local RFail = {}
-local failMT = {__index=RFail}
-function RFail:tostring_char() return "F" end
-function RFail:add(s, name) s.fail[name] = self end
-function RFail:type() return "fail" end
-function RFail:tostring(name)
+local function extract_file_and_line( debug_info )
+   if not debug_info then
+     return {file=nil, line=nil}
+   end
+
    local file
    local line
-   if self.info then
-     file = string.sub(self.info.source, 2)
-     line = self.info.currentline
+   if debug_info then
+     file = string.sub(debug_info.source, 2)
+     line = debug_info.currentline
    end
 
    -- The 'file' is in the runtime distribution, where we want is the path
@@ -155,9 +154,19 @@ function RFail:tostring(name)
      end
    end
 
-   return fmt("%s:%s: FAIL: %s%s: %s%s",
-              file or "",
-              line or "",
+   return {file=file, line=line}
+end
+
+local RFail = {}
+local failMT = {__index=RFail}
+function RFail:tostring_char() return "F" end
+function RFail:add(s, name) s.fail[name] = self end
+function RFail:type() return "fail" end
+function RFail:tostring(name)
+   local pos = extract_file_and_line(self.info)
+   return fmt("\n%s:%s: FAIL: %s%s: %s%s",
+              pos.file or "",
+              pos.line or "",
               name or "(unknown)",
               msec(self.elapsed),
               self.reason or "",
@@ -171,7 +180,7 @@ function RSkip:tostring_char() return "s" end
 function RSkip:add(s, name) s.skip[name] = self end
 function RSkip:type() return "skip" end
 function RSkip:tostring(name)
-   return fmt("SKIP: %s()%s", name or "unknown",
+   return fmt("\nSKIP: %s()%s", name or "unknown",
               self.msg and (" - " .. tostring(self.msg)) or "")
 end
 
@@ -182,8 +191,16 @@ function RError:tostring_char() return "E" end
 function RError:add(s, name) s.err[name] = self end
 function RError:type() return "error" end
 function RError:tostring(name)
-   return self.msg or
-      fmt("ERROR (in %s%s, couldn't get traceback)",
+   local pos = extract_file_and_line(self.info)
+   local msg = self.msg and fmt("\n%s:%s: %s",
+          pos.file or "",
+          pos.line or "",
+          self.msg)
+   print("===========", msg)
+   return msg or
+      fmt("%s:%s: ERROR (in %s%s, couldn't get traceback)",
+          pos.file or "",
+          pos.line or "",
           msec(self.elapsed), name or "(unknown)")
 end
 
@@ -623,13 +640,33 @@ end
 -- interpreted in the same manner as require "modname".
 -- Which functions are tests is determined by is_test_key(name). 
 function suite(modname)
-   local ok, err = pcall(
+   local debug_info
+   local err
+   local function msg_handler(msg)
+      err = msg
+      local i = 1
+      while i <= 8 do
+        debug_info = debug.getinfo(i)
+        print("===========", i)
+        for k,v in pairs(debug_info) do
+          print(k, ": ", v)
+        end
+        print("===========", i)
+        i = i + 1
+      end
+   end
+   local ok = xpcall(
       function()
          local mod, r_err = require(modname)
          suites[modname] = get_tests(mod)
-      end)
+      end,
+      msg_handler)
+
    if not ok then
-      print(fmt(" * Error loading test suite %q:\n%s",
+      local pos = extract_file_and_line(debug_info)
+      print(fmt("%s:%s: * Error loading test suite %q:\n%s",
+                pos.file or "",
+                pos.line or "",
                 modname, tostring(err)))
       failed_suites[#failed_suites+1] = modname
    end
@@ -647,7 +684,8 @@ local function err_handler(name)
              if type(e) == "table" and e.type and ok_types[e.type()] then return e end
              local msg = fmt("ERROR in %s():\n\t%s", name, tostring(e))
              msg = debug.traceback(msg, 3)
-             return Error { msg=msg }
+             info = debug.getinfo(2)
+             return Error { msg=msg, info=info }
           end
 end
 
