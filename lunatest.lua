@@ -131,6 +131,21 @@ function RPass:tostring(name)
               self.msg and (": " .. tostring(self.msg)) or "")
 end
 
+local function substitute_file_path( path )
+   local file = path
+
+   -- The 'file' is in the runtime distribution, where we want is the path
+   --   to the source code directory. So it should be fixed here.
+   if src_root then
+     -- Extract file name part from the full path.
+     local s, e, name = string.find(path, ".*/(.+%.lua)")
+     if s then
+       file = src_root .. "/" .. name
+     end
+   end
+
+   return file
+end
 
 local function extract_file_and_line( debug_info )
    if not debug_info then
@@ -144,16 +159,7 @@ local function extract_file_and_line( debug_info )
      line = debug_info.currentline
    end
 
-   -- The 'file' is in the runtime distribution, where we want is the path
-   --   to the source code directory. So it should be fixed here.
-   if src_root then
-     -- Extract file name part from the full path.
-     local s, e, name = string.find(file, ".*/(.+%.lua)")
-     if s then
-       file = src_root .. "/" .. name
-     end
-   end
-
+   file = substitute_file_path(file)
    return {file=file, line=line}
 end
 
@@ -640,34 +646,20 @@ end
 -- interpreted in the same manner as require "modname".
 -- Which functions are tests is determined by is_test_key(name). 
 function suite(modname)
-   local debug_info
-   local err
-   local function msg_handler(msg)
-      err = msg
-      local i = 1
-      while i <= 8 do
-        debug_info = debug.getinfo(i)
-        print("===========", i)
-        for k,v in pairs(debug_info) do
-          print(k, ": ", v)
-        end
-        print("===========", i)
-        i = i + 1
-      end
-   end
-   local ok = xpcall(
+   local ok, err = pcall(
       function()
          local mod, r_err = require(modname)
          suites[modname] = get_tests(mod)
-      end,
-      msg_handler)
+      end)
 
    if not ok then
-      local pos = extract_file_and_line(debug_info)
+      -- Extract file/line info from error message.
+      local s, e, file, line, msg = string.find(tostring(err), ":%s*(.+):(%d+):(.+)%s*$")
+      file = file and substitute_file_path(file)
       print(fmt("%s:%s: * Error loading test suite %q:\n%s",
-                pos.file or "",
-                pos.line or "",
-                modname, tostring(err)))
+                file or "[Unknown file]",
+                line or "",
+                modname, msg))
       failed_suites[#failed_suites+1] = modname
    end
 end
