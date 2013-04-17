@@ -131,7 +131,7 @@ function RPass:tostring(name)
               self.msg and (": " .. tostring(self.msg)) or "")
 end
 
-local function substitute_file_path( path )
+local function fix_error_file_path( path )
    local file = path
 
    -- The 'file' is in the runtime distribution, where we want is the path
@@ -159,7 +159,7 @@ local function extract_file_and_line( debug_info )
      line = debug_info.currentline
    end
 
-   file = substitute_file_path(file)
+   file = fix_error_file_path(file)
    return {file=file, line=line}
 end
 
@@ -655,7 +655,7 @@ function suite(modname)
    if not ok then
       -- Extract file/line info from error message.
       local s, e, file, line, msg = string.find(tostring(err), ":%s*(.+):(%d+):(.+)%s*$")
-      file = file and substitute_file_path(file)
+      file = file and fix_error_file_path(file)
       print(fmt("%s:%s: * Error loading test suite %q:\n%s",
                 file or "[Unknown file]",
                 line or "",
