@@ -198,11 +198,11 @@ function RError:add(s, name) s.err[name] = self end
 function RError:type() return "error" end
 function RError:tostring(name)
    local pos = extract_file_and_line(self.info)
-   local msg = self.msg and fmt("\n%s:%s: %s",
+   local msg = self.msg and string.gsub(tostring(msg), "\n", " ")
+   msg = msg and fmt("\n%s:%s: %s",
           pos.file or "",
           pos.line or "",
           self.msg)
-   print("===========", msg)
    return msg or
       fmt("%s:%s: ERROR (in %s%s, couldn't get traceback)",
           pos.file or "",
@@ -674,7 +674,12 @@ local ok_types = { pass=true, fail=true, skip=true }
 local function err_handler(name)
    return function (e)
              if type(e) == "table" and e.type and ok_types[e.type()] then return e end
-             local msg = fmt("ERROR in %s():\n\t%s", name, tostring(e))
+
+             -- Extract failed reason from error message.
+             local err_msg = tostring(e)
+             local s, e, reason = string.find(err_msg, ".*:%d+:(.*)$")
+
+             local msg = fmt("ERROR in %s(): %s", name, reason or err_msg)
              msg = debug.traceback(msg, 3)
              info = debug.getinfo(2)
              return Error { msg=msg, info=info }
