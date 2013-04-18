@@ -656,10 +656,13 @@ function suite(modname)
       -- Extract file/line info from error message.
       local s, e, file, line, msg = string.find(tostring(err), ":%s*(.+):(%d+):(.+)%s*$")
       file = file and fix_error_file_path(file)
-      print(fmt("%s:%s: * Error loading test suite %q:\n%s",
-                file or "[Unknown file]",
-                line or "",
-                modname, msg))
+      if file and line then
+        print(fmt("%s:%s: * Error loading test suite %q:\n%s",
+                  file, line, modname, msg))
+      else
+        print(fmt("* Error loading test suite %q:\n%s",
+                  modname, tostring(err)))
+      end
       failed_suites[#failed_suites+1] = modname
    end
 end
