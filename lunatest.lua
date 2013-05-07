@@ -67,7 +67,7 @@ local now = pcall(require, "socket") and socket.gettime or
                local s, us = posix.gettimeofday()
                return s + us / 1000000
             end or
-            function () return tonumber(os.date("%s")) end
+            function () return tonumber(os.date("%S")) end
 
 -- Get env immediately wrapping module, to put assert_ tests there.
 local _importing_env = getenv()
